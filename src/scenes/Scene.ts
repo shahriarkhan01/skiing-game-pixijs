@@ -30,11 +30,13 @@ export class Scene extends Container {
   private negativeScoreStyle: TextStyle;
   private velocity: { x: number; y: number } = { x: 0, y: 0 };
   private maxSpeed: number = 6;
-  private acceleration: number = 0.4;
+  private acceleration: number = 0.9;
   private friction: number = 0.98;
   private background: TilingSprite;
-  private trees: PIXI.Sprite[] = [];
+  private backgroundObjects: PIXI.Sprite[] = [];
   private treeTexture: Texture;
+  private normalRockTexture: Texture;
+  private snowRockTexture: Texture;
 
   constructor(screenWidth: number, screenHeight: number) {
     super();
@@ -47,7 +49,10 @@ export class Scene extends Container {
     this.addChild(this.background);
 
     this.treeTexture = Texture.from("tree.png");
+    this.normalRockTexture = Texture.from("normal_rock.png");
+    this.snowRockTexture = Texture.from("snow_rock.png");
     this.addRandomTrees();
+
 
     this.joystickController = new JoystickController(100, 50);
     this.joystickController.x = screenWidth - 150;
@@ -92,21 +97,35 @@ export class Scene extends Container {
     // Ensure the number of trees is within the desired range
     const treeCount = Math.min(maxTrees, Math.max(minTrees, idealTreeCount));
 
-    this.trees.forEach((tree) => this.removeChild(tree));
-    this.trees = [];
+    this.backgroundObjects.forEach((tree) => this.removeChild(tree));
+    this.backgroundObjects = [];
 
     for (let i = 0; i < treeCount; i++) {
-      const tree = new PIXI.Sprite(this.treeTexture);
-      tree.anchor.set(0.5, 1);
+      let object;
+      if (i%2 == 0) {
+        object = new PIXI.Sprite(this.treeTexture);
+      } else {
+        let randomNumber = this.getRandomNumber();
+        if (randomNumber == 0) {
+          object = new PIXI.Sprite(this.normalRockTexture);
+        } else {
+          object = new PIXI.Sprite(this.snowRockTexture);
+        }
+      }
+      object.anchor.set(0.5, 1);
 
       // Place trees randomly across the entire screen area
-      tree.x = Math.random() * this.screenWidth;
-      tree.y = Math.random() * this.screenHeight;
+      object.x = Math.random() * this.screenWidth;
+      object.y = Math.random() * this.screenHeight;
 
-      this.addChild(tree);
-      this.trees.push(tree);
+      this.addChild(object);
+      this.backgroundObjects.push(object);
     }
   }
+
+  private getRandomNumber(): number {
+    return Math.floor(Math.random() * 11);
+  }  
 
   private update(deltaTime: number) {
     const joystickDirection = this.joystickController.getDirection();
@@ -133,8 +152,11 @@ export class Scene extends Container {
     }
 
     // Update velocity based on direction
-    this.velocity.x += direction.x * this.acceleration;
-    this.velocity.y += direction.y * this.acceleration;
+    const accelerationX = direction.x * this.acceleration;
+    const accelerationY = direction.y * this.acceleration;
+
+    this.velocity.x += accelerationX;
+    this.velocity.y += accelerationY;
 
     // Apply friction
     this.velocity.x *= this.friction;
@@ -151,54 +173,34 @@ export class Scene extends Container {
     );
 
     // Update the character's position based on velocity
-    this.character.x += this.velocity.x * deltaTime;
-    this.character.y += this.velocity.y * deltaTime;
+    this.character.x = this.screenWidth / 2;
+    this.character.y = this.screenHeight / 2;
 
-    const backgroundMovementX = this.velocity.x * deltaTime;
-    const backgroundMovementY = this.velocity.y * deltaTime;
-    this.background.tilePosition.x -= backgroundMovementX;
-    this.background.tilePosition.y -= backgroundMovementY;
-    this.trees.forEach((tree) => {
-      tree.x -= backgroundMovementX;
-      tree.y -= backgroundMovementY;
+    // Update the character's position and rotation
+    this.character.update(deltaTime, direction);
+
+    // Adjust background movement
+    const moveX = this.velocity.x * deltaTime;
+    const moveY = this.velocity.y * deltaTime;
+    this.background.tilePosition.x -= moveX;
+    this.background.tilePosition.y -= moveY;
+
+    this.backgroundObjects.forEach((objects) => {
+      objects.x -= moveX;
+      objects.y -= moveY;
 
       // Wrap the trees around the screen if they move off one side
-      if (tree.x + tree.width < 0) {
-        tree.x += this.screenWidth + tree.width;
-      } else if (tree.x > this.screenWidth) {
-        tree.x -= this.screenWidth + tree.width;
+      if (objects.x + objects.width < 0) {
+        objects.x += this.screenWidth + objects.width;
+      } else if (objects.x > this.screenWidth) {
+        objects.x -= this.screenWidth + objects.width;
       }
-      if (tree.y + tree.height < 0) {
-        tree.y += this.screenHeight + tree.height;
-      } else if (tree.y > this.screenHeight) {
-        tree.y -= this.screenHeight + tree.height;
+      if (objects.y + objects.height < 0) {
+        objects.y += this.screenHeight + objects.height;
+      } else if (objects.y > this.screenHeight) {
+        objects.y -= this.screenHeight + objects.height;
       }
     });
-
-    // Update the background position based on character's movement
-    this.background.tilePosition.x = Math.max(
-      Math.min(0, this.background.tilePosition.x),
-      -(this.background.width - this.screenWidth)
-    );
-    this.background.tilePosition.y = Math.max(
-      Math.min(0, this.background.tilePosition.y),
-      -(this.background.height - this.screenHeight)
-    );
-
-    // Clamp the character's position within the screen boundaries
-    const characterWidth = this.character.width;
-    const characterHeight = this.character.height;
-
-    this.character.x = Math.max(
-      0,
-      Math.min(this.screenWidth - characterWidth, this.character.x)
-    );
-    this.character.y = Math.max(
-      0,
-      Math.min(this.screenHeight - characterHeight, this.character.y)
-    );
-
-    this.character.update(deltaTime, direction);
 
     // Update obstacles and bonuses
     this.updateObstacles(deltaTime);
