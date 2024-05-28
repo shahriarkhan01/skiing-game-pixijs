@@ -8,7 +8,7 @@ import {
 } from "pixi.js";
 import { Character } from "../objects/Character";
 import { JoystickController } from "../controls/JoystickController";
-import { Keyboard } from "../controls/KeyboardController";
+import { KeyboardController } from "../controls/KeyboardController";
 import { Obstacle } from "../objects/Obstacle";
 import { Bonus } from "../objects/Bonus";
 import * as PIXI from "pixi.js";
@@ -59,7 +59,7 @@ export class Scene extends Container {
     this.character.y = screenHeight / 2;
     this.addChild(this.character);
 
-    Keyboard.initialize();
+    KeyboardController.initialize();
 
     this.positiveScoreStyle = new TextStyle({
       fontSize: 36,
@@ -112,15 +112,15 @@ export class Scene extends Container {
     const joystickDirection = this.joystickController.getDirection();
     let direction = { x: joystickDirection.x, y: joystickDirection.y };
 
-    if (Keyboard.isKeyDown("ArrowUp")) {
+    if (KeyboardController.isKeyDown("ArrowUp")) {
       direction.y = -1;
-    } else if (Keyboard.isKeyDown("ArrowDown")) {
+    } else if (KeyboardController.isKeyDown("ArrowDown")) {
       direction.y = 1;
     }
 
-    if (Keyboard.isKeyDown("ArrowLeft")) {
+    if (KeyboardController.isKeyDown("ArrowLeft")) {
       direction.x = -1;
-    } else if (Keyboard.isKeyDown("ArrowRight")) {
+    } else if (KeyboardController.isKeyDown("ArrowRight")) {
       direction.x = 1;
     }
 
