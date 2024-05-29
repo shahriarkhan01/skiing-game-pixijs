@@ -20,8 +20,8 @@ export class Scene extends Container {
   private screenHeight: number;
   private obstacles: Obstacle[] = [];
   private bonuses: Bonus[] = [];
-  private obstacleSpawnInterval: number = 1000;
-  private bonusSpawnInterval: number = 1000;
+  private obstacleSpawnInterval: number = 4700;
+  private bonusSpawnInterval: number = 4700;
   private lastObstacleSpawnTime: number = 0;
   private lastBonusSpawnTime: number = 0;
   private score: number = 0;
@@ -36,7 +36,7 @@ export class Scene extends Container {
   private backgroundObjects: PIXI.Sprite[] = [];
   private treeTexture: Texture;
   private normalRockTexture: Texture;
-  private snowRockTexture: Texture;
+  private snowTreeTexture: Texture;
 
   constructor(screenWidth: number, screenHeight: number) {
     super();
@@ -50,9 +50,8 @@ export class Scene extends Container {
 
     this.treeTexture = Texture.from("tree.png");
     this.normalRockTexture = Texture.from("normal_rock.png");
-    this.snowRockTexture = Texture.from("snow_rock.png");
+    this.snowTreeTexture = Texture.from("snow_rock.png");
     this.addRandomTrees();
-
 
     this.joystickController = new JoystickController(100, 50);
     this.joystickController.x = screenWidth - 150;
@@ -102,14 +101,14 @@ export class Scene extends Container {
 
     for (let i = 0; i < treeCount; i++) {
       let object;
-      if (i%2 == 0) {
+      if (i % 2 == 0) {
         object = new PIXI.Sprite(this.treeTexture);
       } else {
         let randomNumber = this.getRandomNumber();
         if (randomNumber == 0) {
           object = new PIXI.Sprite(this.normalRockTexture);
         } else {
-          object = new PIXI.Sprite(this.snowRockTexture);
+          object = new PIXI.Sprite(this.snowTreeTexture);
         }
       }
       object.anchor.set(0.5, 1);
@@ -125,7 +124,7 @@ export class Scene extends Container {
 
   private getRandomNumber(): number {
     return Math.floor(Math.random() * 11);
-  }  
+  }
 
   private update(deltaTime: number) {
     const joystickDirection = this.joystickController.getDirection();
@@ -151,18 +150,12 @@ export class Scene extends Container {
       direction.y /= magnitude;
     }
 
-    // Update velocity based on direction
-    const accelerationX = direction.x * this.acceleration;
-    const accelerationY = direction.y * this.acceleration;
+    this.velocity.x += direction.x * this.acceleration;
+    this.velocity.y += direction.y * this.acceleration;
 
-    this.velocity.x += accelerationX;
-    this.velocity.y += accelerationY;
-
-    // Apply friction
     this.velocity.x *= this.friction;
     this.velocity.y *= this.friction;
 
-    // Clamp the velocity to max speed
     this.velocity.x = Math.max(
       -this.maxSpeed,
       Math.min(this.maxSpeed, this.velocity.x)
@@ -172,37 +165,16 @@ export class Scene extends Container {
       Math.min(this.maxSpeed, this.velocity.y)
     );
 
-    // Update the character's position based on velocity
-    this.character.x = this.screenWidth / 2;
-    this.character.y = this.screenHeight / 2;
-
-    // Update the character's position and rotation
-    this.character.update(deltaTime, direction);
-
-    // Adjust background movement
     const moveX = this.velocity.x * deltaTime;
     const moveY = this.velocity.y * deltaTime;
     this.background.tilePosition.x -= moveX;
     this.background.tilePosition.y -= moveY;
 
-    this.backgroundObjects.forEach((objects) => {
-      objects.x -= moveX;
-      objects.y -= moveY;
+    this.wrapObjects(this.backgroundObjects, moveX, moveY);
+    this.wrapObjects(this.obstacles, moveX, moveY);
+    this.wrapObjects(this.bonuses, moveX, moveY);
 
-      // Wrap the trees around the screen if they move off one side
-      if (objects.x + objects.width < 0) {
-        objects.x += this.screenWidth + objects.width;
-      } else if (objects.x > this.screenWidth) {
-        objects.x -= this.screenWidth + objects.width;
-      }
-      if (objects.y + objects.height < 0) {
-        objects.y += this.screenHeight + objects.height;
-      } else if (objects.y > this.screenHeight) {
-        objects.y -= this.screenHeight + objects.height;
-      }
-    });
-
-    // Update obstacles and bonuses
+    this.character.update(deltaTime, direction);
     this.updateObstacles(deltaTime);
     this.updateBonuses(deltaTime);
 
@@ -218,8 +190,41 @@ export class Scene extends Container {
 
     this.checkCollisions();
     this.checkBonusCollisions();
-
     this.updateScoreText();
+
+    this.character.x = this.screenWidth / 2;
+    this.character.y = this.screenHeight / 2;
+  }
+
+  private wrapObjects(
+    objects: PIXI.DisplayObject[],
+    moveX: number,
+    moveY: number
+  ) {
+    objects.forEach((object) => {
+      object.x -= moveX;
+      object.y -= moveY;
+
+      // Check if the object has width and height properties
+      if ("width" in object && "height" in object) {
+        const obj = object as PIXI.DisplayObject & {
+          width: number;
+          height: number;
+        };
+
+        if (obj.x + obj.width < 0) {
+          obj.x += this.screenWidth + obj.width;
+        } else if (obj.x - obj.width > this.screenWidth) {
+          obj.x -= this.screenWidth + obj.width;
+        }
+
+        if (obj.y + obj.height < 0) {
+          obj.y += this.screenHeight + obj.height;
+        } else if (obj.y - obj.height > this.screenHeight) {
+          obj.y -= this.screenHeight + obj.height;
+        }
+      }
+    });
   }
 
   private spawnObstacle() {
