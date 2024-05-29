@@ -213,15 +213,15 @@ export class Scene extends Container {
         };
 
         if (obj.x + obj.width < 0) {
-          obj.x += this.screenWidth + obj.width;
+          obj.x += this.screenWidth + (obj.width * 2);
         } else if (obj.x - obj.width > this.screenWidth) {
-          obj.x -= this.screenWidth + obj.width;
+          obj.x -= this.screenWidth + (obj.width * 2);
         }
 
         if (obj.y + obj.height < 0) {
-          obj.y += this.screenHeight + obj.height;
+          obj.y += this.screenHeight + (obj.height * 2);
         } else if (obj.y - obj.height > this.screenHeight) {
-          obj.y -= this.screenHeight + obj.height;
+          obj.y -= this.screenHeight + (obj.height * 2);
         }
       }
     });
@@ -249,18 +249,12 @@ export class Scene extends Container {
     this.obstacles.forEach((obstacle) => {
       obstacle.update(deltaTime);
     });
-    this.obstacles = this.obstacles.filter(
-      (obstacle) => obstacle.y <= this.screenHeight + obstacle.height
-    );
   }
 
   private updateBonuses(deltaTime: number) {
     this.bonuses.forEach((bonus) => {
       bonus.update(deltaTime);
     });
-    this.bonuses = this.bonuses.filter(
-      (bonus) => bonus.y <= this.screenHeight + bonus.height
-    );
   }
 
   private checkCollisions() {
