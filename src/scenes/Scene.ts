@@ -20,7 +20,7 @@ export class Scene extends Container {
   private screenHeight: number;
   private obstacles: Obstacle[] = [];
   private bonuses: Bonus[] = [];
-  private obstacleSpawnInterval: number = 4700;
+  private obstacleSpawnInterval: number = 7700;
   private bonusSpawnInterval: number = 4700;
   private lastObstacleSpawnTime: number = 0;
   private lastBonusSpawnTime: number = 0;
