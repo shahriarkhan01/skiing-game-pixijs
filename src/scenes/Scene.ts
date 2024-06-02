@@ -8,6 +8,7 @@ import {
   Sprite,
   Rectangle,
   DisplayObject,
+  Graphics,
 } from "pixi.js";
 import { Character } from "../objects/Character";
 import { JoystickController } from "../controls/JoystickController";
@@ -23,8 +24,8 @@ export class Scene extends Container {
   private screenHeight: number;
   private obstacles: Obstacle[] = [];
   private bonuses: Bonus[] = [];
-  private obstacleSpawnInterval: number = 7700;
-  private bonusSpawnInterval: number = 5700;
+  private obstacleSpawnInterval: number = 5700;
+  private bonusSpawnInterval: number = 7700;
   private lastObstacleSpawnTime: number = 0;
   private lastBonusSpawnTime: number = 0;
   private score: number = 0;
@@ -40,6 +41,11 @@ export class Scene extends Container {
   private treeTexture: Texture;
   private normalRockTexture: Texture;
   private snowTreeTexture: Texture;
+  private isPaused: boolean = false;
+  private isMuted: boolean = false;
+  private muteButton!: Text;
+  private pauseButton!: Text;
+  private backgroundMusic: sound.Sound;
 
   constructor(screenWidth: number, screenHeight: number) {
     super();
@@ -83,7 +89,67 @@ export class Scene extends Container {
     this.scoreText.y = 20;
     this.addChild(this.scoreText);
 
+    this.createControlButtons();
+
+    this.backgroundMusic = sound.Sound.from("sound/background_music_sound.mp3");
+    this.backgroundMusic.play({ loop: true, volume: 0.5 });
+
     Ticker.shared.add(this.update.bind(this));
+  }
+
+  private createControlButtons() {
+    const buttonStyle = new TextStyle({
+      fontSize: 24,
+      fill: 0xffffff,
+    });
+
+    const pauseButtonBg = new Graphics();
+    pauseButtonBg.beginFill(0x000000);
+    pauseButtonBg.drawRect(0, 0, 100, 40);
+    pauseButtonBg.endFill();
+    pauseButtonBg.x = this.screenWidth - 120;
+    pauseButtonBg.y = 20;
+    pauseButtonBg.interactive = true;
+    pauseButtonBg.cursor = "pointer";
+    pauseButtonBg.on("pointerdown", this.togglePause.bind(this));
+    this.addChild(pauseButtonBg);
+
+    this.pauseButton = new Text("Pause", buttonStyle);
+    this.pauseButton.x = this.screenWidth - 110;
+    this.pauseButton.y = 25;
+    this.addChild(this.pauseButton);
+
+    const muteButtonBg = new Graphics();
+    muteButtonBg.beginFill(0x000000);
+    muteButtonBg.drawRect(0, 0, 100, 40);
+    muteButtonBg.endFill();
+    muteButtonBg.x = this.screenWidth - 120;
+    muteButtonBg.y = 70;
+    muteButtonBg.interactive = true;
+    muteButtonBg.cursor = "pointer";
+    muteButtonBg.on("pointerdown", this.toggleMute.bind(this));
+    this.addChild(muteButtonBg);
+
+    this.muteButton = new Text("Mute", buttonStyle);
+    this.muteButton.x = this.screenWidth - 110;
+    this.muteButton.y = 75;
+    this.addChild(this.muteButton);
+  }
+
+  private togglePause() {
+    this.isPaused = !this.isPaused;
+    this.pauseButton.text = this.isPaused ? "Resume" : "Pause";
+  }
+
+  private toggleMute() {
+    this.isMuted = !this.isMuted;
+    if (this.isMuted) {
+      this.backgroundMusic.volume = 0;
+      this.muteButton.text = "Unmute";
+    } else {
+      this.backgroundMusic.volume = 0.5;
+      this.muteButton.text = "Mute";
+    }
   }
 
   private addRandomTrees() {
@@ -91,12 +157,10 @@ export class Scene extends Container {
     const maxTrees = 5;
     const treeDensity = 1000;
 
-    // Calculate the ideal number of trees based on screen area and tree density
     const idealTreeCount = Math.ceil(
       (this.screenWidth * this.screenHeight) / treeDensity
     );
 
-    // Ensure the number of trees is within the desired range
     const treeCount = Math.min(maxTrees, Math.max(minTrees, idealTreeCount));
 
     this.backgroundObjects.forEach((tree) => this.removeChild(tree));
@@ -116,7 +180,6 @@ export class Scene extends Container {
       }
       object.anchor.set(0.5, 1);
 
-      // Place trees randomly across the entire screen area
       object.x = Math.random() * this.screenWidth;
       object.y = Math.random() * this.screenHeight;
 
@@ -130,6 +193,10 @@ export class Scene extends Container {
   }
 
   private update(deltaTime: number) {
+    if (this.isPaused) {
+      return;
+    }
+
     const joystickDirection = this.joystickController.getDirection();
     let direction = { x: joystickDirection.x, y: joystickDirection.y };
 
@@ -159,8 +226,14 @@ export class Scene extends Container {
     this.velocity.x *= this.friction;
     this.velocity.y *= this.friction;
 
-    this.velocity.x = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velocity.x));
-    this.velocity.y = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velocity.y));
+    this.velocity.x = Math.max(
+      -this.maxSpeed,
+      Math.min(this.maxSpeed, this.velocity.x)
+    );
+    this.velocity.y = Math.max(
+      -this.maxSpeed,
+      Math.min(this.maxSpeed, this.velocity.y)
+    );
 
     const moveX = this.velocity.x * deltaTime;
     const moveY = this.velocity.y * deltaTime;
@@ -187,17 +260,12 @@ export class Scene extends Container {
 
     this.checkCollisions();
     this.checkBonusCollisions();
-    this.updateScoreText();
 
     this.character.x = this.screenWidth / 2;
     this.character.y = this.screenHeight / 2;
   }
 
-  private wrapObjects(
-    objects: DisplayObject[],
-    moveX: number,
-    moveY: number
-  ) {
+  private wrapObjects(objects: DisplayObject[], moveX: number, moveY: number) {
     objects.forEach((object) => {
       object.x -= moveX;
       object.y -= moveY;
@@ -210,18 +278,26 @@ export class Scene extends Container {
         };
 
         if (obj.x + obj.width < 0) {
-          obj.x += this.screenWidth + (obj.width * 2);
+          obj.x += this.screenWidth + obj.width * 2;
         } else if (obj.x - obj.width > this.screenWidth) {
-          obj.x -= this.screenWidth + (obj.width * 2);
+          obj.x -= this.screenWidth + obj.width * 2;
         }
 
         if (obj.y + obj.height < 0) {
-          obj.y += this.screenHeight + (obj.height * 2);
+          obj.y += this.screenHeight + obj.height * 2;
         } else if (obj.y - obj.height > this.screenHeight) {
-          obj.y -= this.screenHeight + (obj.height * 2);
+          obj.y -= this.screenHeight + obj.height * 2;
         }
       }
     });
+  }
+
+  private updateObstacles(deltaTime: number) {
+    this.obstacles.forEach((obstacle) => obstacle.update(deltaTime));
+  }
+
+  private updateBonuses(deltaTime: number) {
+    this.bonuses.forEach((bonus) => bonus.update(deltaTime));
   }
 
   private spawnObstacle() {
@@ -242,91 +318,47 @@ export class Scene extends Container {
     this.addChild(bonus);
   }
 
-  private updateObstacles(deltaTime: number) {
-    this.obstacles.forEach((obstacle) => {
-      obstacle.update(deltaTime);
-    });
-  }
-
-  private updateBonuses(deltaTime: number) {
-    this.bonuses.forEach((bonus) => {
-      bonus.update(deltaTime);
-    });
-  }
-
   private checkCollisions() {
-    const characterBounds = this.character.getBounds();
-
     this.obstacles.forEach((obstacle, index) => {
+      const characterBounds = this.character.getBounds();
       const obstacleBounds = obstacle.getBounds();
-      if (this.isColliding(characterBounds, obstacleBounds)) {
-        console.log("Collision detected!");
-        this.score -= 100;
 
-        // Play hitting obstacle sound
-        sound.Sound.from("sound/hitting_obstacle_sound.mp3").play({
-          volume: 0.7,
-          speed: 1 + Math.random() * 0.2 - 0.1, // Random speed between 0.9 and 1.1
-        });
-
-        // Visual feedback: flash the obstacle red
-        const originalTint = obstacle.tint;
-        obstacle.tint = 0xFF0000; // Red
-        setTimeout(() => {
-          obstacle.tint = originalTint;
-        }, 100);
-
-        // Remove the obstacle
+      if (this.intersects(characterBounds, obstacleBounds)) {
+        this.score--;
+        this.updateScoreText();
         this.removeChild(obstacle);
         this.obstacles.splice(index, 1);
-
-        // Apply knockback effect to the character
-        const knockbackDirection = {
-          x: -this.velocity.x,
-          y: -this.velocity.y
-        };
-        const knockbackMagnitude = 10;
-        this.velocity.x += knockbackDirection.x * knockbackMagnitude;
-        this.velocity.y += knockbackDirection.y * knockbackMagnitude;
-
-        // Update the score text
-        this.updateScoreText();
+        let hittingObstacleSound = sound.Sound.from(
+          "sound/hitting_obstacle_sound.mp3"
+        );
+        if (!this.isMuted) {
+          hittingObstacleSound.play({ volume: 0.5 });
+        }
       }
     });
   }
 
   private checkBonusCollisions() {
-    const characterBounds = this.character.getBounds();
-
     this.bonuses.forEach((bonus, index) => {
+      const characterBounds = this.character.getBounds();
       const bonusBounds = bonus.getBounds();
-      if (this.isColliding(characterBounds, bonusBounds)) {
-        console.log("Bonus collected!");
-        this.score += 50;
 
-        sound.Sound.from("sound/bonus_getting_sound.mp3").play({
-          volume: 0.8,
-          speed: 1 + Math.random() * 0.4 - 0.2,
-        });
-
+      if (this.intersects(characterBounds, bonusBounds)) {
+        this.score++;
+        this.updateScoreText();
         this.removeChild(bonus);
         this.bonuses.splice(index, 1);
-
-        this.updateScoreText();
+        let bonusGettingSound = sound.Sound.from(
+          "sound/bonus_getting_sound.mp3"
+        );
+        if (!this.isMuted) {
+          bonusGettingSound.play({ volume: 0.5 });
+        }
       }
     });
   }
 
-  private updateScoreText() {
-    if (this.score >= 0) {
-      this.scoreText.style = this.positiveScoreStyle;
-    } else {
-      this.scoreText.style = this.negativeScoreStyle;
-    }
-    this.scoreText.text = `Score: ${this.score}`;
-  }
-
-  private isColliding(rect1: Rectangle, rect2: Rectangle): boolean {
+  private intersects(rect1: Rectangle, rect2: Rectangle): boolean {
     return (
       rect1.x < rect2.x + rect2.width &&
       rect1.x + rect1.width > rect2.x &&
@@ -335,13 +367,9 @@ export class Scene extends Container {
     );
   }
 
-  public getCharacterDirection(): { x: number; y: number } {
-    const magnitude = Math.sqrt(
-      this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y
-    );
-    return {
-      x: magnitude === 0 ? 0 : this.velocity.x / magnitude,
-      y: magnitude === 0 ? 0 : this.velocity.y / magnitude,
-    };
+  private updateScoreText() {
+    this.scoreText.text = `Score: ${this.score}`;
+    this.scoreText.style =
+      this.score >= 0 ? this.positiveScoreStyle : this.negativeScoreStyle;
   }
 }
