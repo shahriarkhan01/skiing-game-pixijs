@@ -5,13 +5,16 @@ import {
   TextStyle,
   TilingSprite,
   Texture,
+  Sprite,
+  Rectangle,
+  DisplayObject,
 } from "pixi.js";
 import { Character } from "../objects/Character";
 import { JoystickController } from "../controls/JoystickController";
 import { KeyboardController } from "../controls/KeyboardController";
 import { Obstacle } from "../objects/Obstacle";
 import { Bonus } from "../objects/Bonus";
-import * as PIXI from "pixi.js";
+import * as sound from "@pixi/sound";
 
 export class Scene extends Container {
   private character: Character;
@@ -33,7 +36,7 @@ export class Scene extends Container {
   private acceleration: number = 0.9;
   private friction: number = 0.98;
   private background: TilingSprite;
-  private backgroundObjects: PIXI.Sprite[] = [];
+  private backgroundObjects: Sprite[] = [];
   private treeTexture: Texture;
   private normalRockTexture: Texture;
   private snowTreeTexture: Texture;
@@ -50,7 +53,7 @@ export class Scene extends Container {
 
     this.treeTexture = Texture.from("tree.png");
     this.normalRockTexture = Texture.from("normal_rock.png");
-    this.snowTreeTexture = Texture.from("snow_rock.png");
+    this.snowTreeTexture = Texture.from("snow_tree.png");
     this.addRandomTrees();
 
     this.joystickController = new JoystickController(100, 50);
@@ -102,13 +105,13 @@ export class Scene extends Container {
     for (let i = 0; i < treeCount; i++) {
       let object;
       if (i % 2 == 0) {
-        object = new PIXI.Sprite(this.treeTexture);
+        object = new Sprite(this.treeTexture);
       } else {
         let randomNumber = this.getRandomNumber();
         if (randomNumber == 0) {
-          object = new PIXI.Sprite(this.normalRockTexture);
+          object = new Sprite(this.normalRockTexture);
         } else {
-          object = new PIXI.Sprite(this.snowTreeTexture);
+          object = new Sprite(this.snowTreeTexture);
         }
       }
       object.anchor.set(0.5, 1);
@@ -156,14 +159,8 @@ export class Scene extends Container {
     this.velocity.x *= this.friction;
     this.velocity.y *= this.friction;
 
-    this.velocity.x = Math.max(
-      -this.maxSpeed,
-      Math.min(this.maxSpeed, this.velocity.x)
-    );
-    this.velocity.y = Math.max(
-      -this.maxSpeed,
-      Math.min(this.maxSpeed, this.velocity.y)
-    );
+    this.velocity.x = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velocity.x));
+    this.velocity.y = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.velocity.y));
 
     const moveX = this.velocity.x * deltaTime;
     const moveY = this.velocity.y * deltaTime;
@@ -197,7 +194,7 @@ export class Scene extends Container {
   }
 
   private wrapObjects(
-    objects: PIXI.DisplayObject[],
+    objects: DisplayObject[],
     moveX: number,
     moveY: number
   ) {
@@ -207,7 +204,7 @@ export class Scene extends Container {
 
       // Check if the object has width and height properties
       if ("width" in object && "height" in object) {
-        const obj = object as PIXI.DisplayObject & {
+        const obj = object as DisplayObject & {
           width: number;
           height: number;
         };
@@ -260,14 +257,40 @@ export class Scene extends Container {
   private checkCollisions() {
     const characterBounds = this.character.getBounds();
 
-    this.obstacles.forEach((obstacle) => {
+    this.obstacles.forEach((obstacle, index) => {
       const obstacleBounds = obstacle.getBounds();
       if (this.isColliding(characterBounds, obstacleBounds)) {
         console.log("Collision detected!");
         this.score -= 100;
-        // need to break the obstacle if collided
+
+        // Play hitting obstacle sound
+        sound.Sound.from("sound/hitting_obstacle_sound.mp3").play({
+          volume: 0.7,
+          speed: 1 + Math.random() * 0.2 - 0.1, // Random speed between 0.9 and 1.1
+        });
+
+        // Visual feedback: flash the obstacle red
+        const originalTint = obstacle.tint;
+        obstacle.tint = 0xFF0000; // Red
+        setTimeout(() => {
+          obstacle.tint = originalTint;
+        }, 100);
+
+        // Remove the obstacle
         this.removeChild(obstacle);
-        this.obstacles = this.obstacles.filter((o) => o !== obstacle);
+        this.obstacles.splice(index, 1);
+
+        // Apply knockback effect to the character
+        const knockbackDirection = {
+          x: -this.velocity.x,
+          y: -this.velocity.y
+        };
+        const knockbackMagnitude = 10;
+        this.velocity.x += knockbackDirection.x * knockbackMagnitude;
+        this.velocity.y += knockbackDirection.y * knockbackMagnitude;
+
+        // Update the score text
+        this.updateScoreText();
       }
     });
   }
@@ -275,13 +298,21 @@ export class Scene extends Container {
   private checkBonusCollisions() {
     const characterBounds = this.character.getBounds();
 
-    this.bonuses.forEach((bonus) => {
+    this.bonuses.forEach((bonus, index) => {
       const bonusBounds = bonus.getBounds();
       if (this.isColliding(characterBounds, bonusBounds)) {
         console.log("Bonus collected!");
         this.score += 50;
+
+        sound.Sound.from("sound/bonus_getting_sound.mp3").play({
+          volume: 0.8,
+          speed: 1 + Math.random() * 0.4 - 0.2,
+        });
+
         this.removeChild(bonus);
-        this.bonuses = this.bonuses.filter((b) => b !== bonus);
+        this.bonuses.splice(index, 1);
+
+        this.updateScoreText();
       }
     });
   }
@@ -295,7 +326,7 @@ export class Scene extends Container {
     this.scoreText.text = `Score: ${this.score}`;
   }
 
-  private isColliding(rect1: PIXI.Rectangle, rect2: PIXI.Rectangle): boolean {
+  private isColliding(rect1: Rectangle, rect2: Rectangle): boolean {
     return (
       rect1.x < rect2.x + rect2.width &&
       rect1.x + rect1.width > rect2.x &&
