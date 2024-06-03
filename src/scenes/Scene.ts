@@ -262,7 +262,7 @@ export class Scene extends Container {
     this.checkBonusCollisions();
 
     this.character.x = this.screenWidth / 2;
-    this.character.y = this.screenHeight / 2;
+    this.character.y = this.screenHeight / 2.3;
   }
 
   private wrapObjects(objects: DisplayObject[], moveX: number, moveY: number) {
@@ -310,7 +310,7 @@ export class Scene extends Container {
   }
 
   private spawnBonus() {
-    const size = Math.random() * 10 + 10;
+    const size = Math.random() * 20 + 10;
     const bonus = new Bonus(size);
     bonus.x = Math.random() * (this.screenWidth - size * 2) + size;
     bonus.y = -size;
@@ -319,21 +319,77 @@ export class Scene extends Container {
   }
 
   private checkCollisions() {
+    const characterBounds = this.character.getBounds();
+  
+    // Check collisions with obstacles
     this.obstacles.forEach((obstacle, index) => {
-      const characterBounds = this.character.getBounds();
       const obstacleBounds = obstacle.getBounds();
-
-      if (this.intersects(characterBounds, obstacleBounds)) {
-        this.score--;
-        this.updateScoreText();
+      if (this.isColliding(characterBounds, obstacleBounds)) {
+        console.log("Collision with obstacle!");
+        this.score -= 1;
+  
+        // Play hitting obstacle sound
+        sound.Sound.from("sound/hitting_obstacle_sound.mp3").play({
+          volume: 0.7,
+          speed: 1 + Math.random() * 0.2 - 0.1, // Random speed between 0.9 and 1.1
+        });
+  
+        // Visual feedback: flash the obstacle red
+        const originalTint = obstacle.tint;
+        obstacle.tint = 0xFF0000; // Red
+        setTimeout(() => {
+          obstacle.tint = originalTint;
+        }, 100);
+  
+        // Remove the obstacle
         this.removeChild(obstacle);
         this.obstacles.splice(index, 1);
-        let hittingObstacleSound = sound.Sound.from(
-          "sound/hitting_obstacle_sound.mp3"
-        );
-        if (!this.isMuted) {
-          hittingObstacleSound.play({ volume: 0.5 });
-        }
+  
+        // Apply knockback effect to the character
+        const knockbackDirection = {
+          x: -this.velocity.x,
+          y: -this.velocity.y
+        };
+        const knockbackMagnitude = 10;
+        this.velocity.x += knockbackDirection.x * knockbackMagnitude;
+        this.velocity.y += knockbackDirection.y * knockbackMagnitude;
+  
+        // Update the score text
+        this.updateScoreText();
+      }
+    });
+  
+    // Check collisions with trees and rocks
+    this.backgroundObjects.forEach((object) => {
+      const objectBounds = object.getBounds();
+      if (this.isColliding(characterBounds, objectBounds)) {
+        console.log("Collision with background object!");
+        this.score -= 1;
+  
+        // Play hitting obstacle sound
+        sound.Sound.from("sound/hitting_obstacle_sound.mp3").play({
+          volume: 0.6,
+          speed: 1 + Math.random() * 0.3 - 0.15, // Random speed between 0.85 and 1.15
+        });
+  
+        // Visual feedback: flash the object red
+        const originalTint = object.tint;
+        object.tint = 0xFF0000; // Red
+        setTimeout(() => {
+          object.tint = originalTint;
+        }, 100);
+  
+        // Apply knockback effect to the character
+        const knockbackDirection = {
+          x: -this.velocity.x,
+          y: -this.velocity.y
+        };
+        const knockbackMagnitude = 5; // Smaller knockback for trees/rocks
+        this.velocity.x += knockbackDirection.x * knockbackMagnitude;
+        this.velocity.y += knockbackDirection.y * knockbackMagnitude;
+  
+        // Update the score text
+        this.updateScoreText();
       }
     });
   }
@@ -343,7 +399,7 @@ export class Scene extends Container {
       const characterBounds = this.character.getBounds();
       const bonusBounds = bonus.getBounds();
 
-      if (this.intersects(characterBounds, bonusBounds)) {
+      if (this.isColliding(characterBounds, bonusBounds)) {
         this.score++;
         this.updateScoreText();
         this.removeChild(bonus);
@@ -358,7 +414,7 @@ export class Scene extends Container {
     });
   }
 
-  private intersects(rect1: Rectangle, rect2: Rectangle): boolean {
+  private isColliding(rect1: Rectangle, rect2: Rectangle): boolean {
     return (
       rect1.x < rect2.x + rect2.width &&
       rect1.x + rect1.width > rect2.x &&
@@ -372,4 +428,16 @@ export class Scene extends Container {
     this.scoreText.style =
       this.score >= 0 ? this.positiveScoreStyle : this.negativeScoreStyle;
   }
+
+  public getCharacterDirection(): { x: number; y: number } {
+    const magnitude = Math.sqrt(
+      this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y
+    );
+    return {
+      x: magnitude === 0 ? 0 : this.velocity.x / magnitude,
+      y: magnitude === 0 ? 0 : this.velocity.y / magnitude,
+    };
+  }
+
+
 }
